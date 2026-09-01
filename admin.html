@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trang Quản Lý Rút Tiền - Zuno Admin</title>
+    <style>
+        :root {
+            --primary: #d32f2f;
+            --gold: #ffd700;
+            --bg: #121212;
+            --card-bg: #1e1e1e;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg); color: #fff; padding: 15px; }
+
+        .admin-container { max-width: 900px; margin: 0 auto; }
+
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--gold); padding-bottom: 15px; margin-bottom: 20px; }
+        h1 { font-size: 20px; color: var(--gold); }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
+        .stat-card { background: var(--card-bg); padding: 15px; border-radius: 8px; border: 1px solid #333; text-align: center; }
+        .stat-card h3 { font-size: 12px; color: #aaa; margin-bottom: 5px; }
+        .stat-card p { font-size: 18px; font-weight: bold; color: var(--gold); }
+
+        .filter-tabs { display: flex; gap: 8px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px; }
+        .tab-btn { background: #2a2a2a; color: #ccc; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+        .tab-btn.active { background: var(--gold); color: #000; font-weight: bold; }
+
+        .withdraw-list { display: flex; flex-direction: column; gap: 12px; }
+        .withdraw-card { background: var(--card-bg); border-radius: 8px; padding: 15px; border: 1px solid #333; }
+        
+        .card-header { display: flex; justify-content: space-between; font-size: 13px; color: #aaa; margin-bottom: 10px; border-bottom: 1px solid #2a2a2a; padding-bottom: 8px; }
+        .card-body { font-size: 14px; margin-bottom: 12px; }
+        .amount { font-size: 18px; color: var(--gold); font-weight: bold; margin-bottom: 8px; }
+        .bank-info { background: #252525; padding: 10px 12px; border-radius: 6px; font-family: monospace; line-height: 1.6; }
+
+        .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .badge-pending { background: #f57c00; color: #fff; }
+        .badge-approved { background: #388e3c; color: #fff; }
+        .badge-rejected { background: #d32f2f; color: #fff; }
+
+        .actions { display: flex; gap: 10px; margin-top: 10px; }
+        .btn { flex: 1; padding: 8px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; font-size: 13px; }
+        .btn-approve { background: #2e7d32; color: #fff; }
+        .btn-reject { background: #c62828; color: #fff; }
+    </style>
+</head>
+<body>
+
+<div class="admin-container">
+    <header>
+        <h1>⚙️ ZUNO ADMIN - RÚT TIỀN</h1>
+        <small id="statusText" style="color: #ffab91;">Đang kết nối Cloud...</small>
+    </header>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>TỔNG ĐƠN RÚT</h3>
+            <p id="totalOrders">0</p>
+        </div>
+        <div class="stat-card">
+            <h3>CHỜ DUYỆT</h3>
+            <p id="pendingOrders" style="color: #ff9800;">0</p>
+        </div>
+        <div class="stat-card">
+            <h3>TỔNG TIỀN CHỜ</h3>
+            <p id="pendingAmount">0 VNĐ</p>
+        </div>
+    </div>
+
+    <div class="filter-tabs">
+        <button class="tab-btn active" onclick="filterList('all', this)">Tất cả</button>
+        <button class="tab-btn" onclick="filterList('pending', this)">⏳ Chờ duyệt</button>
+        <button class="tab-btn" onclick="filterList('approved', this)">✅ Đã duyệt</button>
+        <button class="tab-btn" onclick="filterList('rejected', this)">❌ Đã từ chối</button>
+    </div>
+
+    <div class="withdraw-list" id="withdrawList">
+        <p style="text-align: center; color: #888; margin-top: 30px;">Đang tải dữ liệu từ Firestore...</p>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { 
+        getFirestore, 
+        collection, 
+        onSnapshot, 
+        doc, 
+        updateDoc, 
+        increment,
+        query,
+        orderBy 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyCFwSPxqgGD7GGTalZCzDy81Z51UlZ447s",
+        authDomain: "zuno-li-xi.firebaseapp.com",
+        projectId: "zuno-li-xi",
+        storageBucket: "zuno-li-xi.firebasestorage.app",
+        messagingSenderId: "240073073112",
+        appId: "1:240073073112:web:0253a525d4514fdfc992ad"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let allOrders = [];
+    let currentFilter = 'all';
+
+    document.addEventListener('DOMContentLoaded', () => {
+        listenToWithdrawals();
+    });
+
+    function listenToWithdrawals() {
+        const q = query(collection(db, "withdrawals"), orderBy("createdAt", "desc"));
+        
+        onSnapshot(q, (snapshot) => {
+            document.getElementById('statusText').innerText = "Trực tuyến (Realtime)";
+            allOrders = [];
+
+            snapshot.forEach((docSnap) => {
+                allOrders.push({
+                    id: docSnap.id,
+                    ...docSnap.data()
+                });
+            });
+
+            updateStats();
+            renderList();
+        }, (error) => {
+            console.error("Lỗi lắng nghe dữ liệu:", error);
+            document.getElementById('statusText').innerText = "Lỗi kết nối Firebase";
+        });
+    }
+
+    function updateStats() {
+        let total = allOrders.length;
+        let pending = 0;
+        let pendingSum = 0;
+
+        allOrders.forEach(item => {
+            if (item.status === 'pending') {
+                pending++;
+                pendingSum += (item.amount || 0);
+            }
+        });
+
+        document.getElementById('totalOrders').innerText = total;
+        document.getElementById('pendingOrders').innerText = pending;
+        document.getElementById('pendingAmount').innerText = pendingSum.toLocaleString('vi-VN') + "đ";
+    }
+
+    function renderList() {
+        const container = document.getElementById('withdrawList');
+        const filtered = allOrders.filter(item => {
+            if (currentFilter === 'all') return true;
+            return item.status === currentFilter;
+        });
+
+        if (filtered.length === 0) {
+            container.innerHTML = `<p style="text-align: center; color: #888; margin-top: 30px;">Không có yêu cầu rút tiền nào.</p>`;
+            return;
+        }
+
+        container.innerHTML = filtered.map(item => {
+            const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString('vi-VN') : 'N/A';
+            let badgeClass = 'badge-pending';
+            let statusText = 'Chờ duyệt';
+
+            if (item.status === 'approved') {
+                badgeClass = 'badge-approved';
+                statusText = 'Đã duyệt';
+            } else if (item.status === 'rejected') {
+                badgeClass = 'badge-rejected';
+                statusText = 'Đã từ chối';
+            }
+
+            return `
+                <div class="withdraw-card">
+                    <div class="card-header">
+                        <span>Mã Đơn: ${item.id.substring(0, 8)}...</span>
+                        <span>${dateStr}</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="amount">${(item.amount || 0).toLocaleString('vi-VN')} VNĐ <span class="badge ${badgeClass}">${statusText}</span></div>
+                        <div class="bank-info">
+                            <strong>Ngân hàng:</strong> ${item.bankName}<br>
+                            <strong>Số TK/Ví:</strong> ${item.accountNumber}<br>
+                            <strong>Chủ TK:</strong> ${item.accountHolder}<br>
+                            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #444; color: #ffab91;">
+                                <strong>User ID:</strong> <code style="background: #000; padding: 2px 6px; border-radius: 4px; color: #4fc3f7;">${item.deviceId || 'N/A'}</code>
+                                <button onclick="navigator.clipboard.writeText('${item.deviceId}')" style="background: #333; color: #fff; border: none; padding: 2px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; margin-left: 5px;">Sao chép ID</button>
+                            </div>
+                        </div>
+                    </div>
+                    ${item.status === 'pending' ? `
+                        <div class="actions">
+                            <button class="btn btn-approve" onclick="window.approveOrder('${item.id}')">✅ Duyệt đơn</button>
+                            <button class="btn btn-reject" onclick="window.rejectOrder('${item.id}', '${item.deviceId}', ${item.amount})">❌ Từ chối & Hoàn tiền</button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+
+    window.filterList = function(type, element) {
+        currentFilter = type;
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        element.classList.add('active');
+        renderList();
+    };
+
+    window.approveOrder = async function(orderId) {
+        if (!confirm("Xác nhận ĐÃ CHUYỂN TIỀN thành công cho đơn này?")) return;
+
+        try {
+            const orderRef = doc(db, "withdrawals", orderId);
+            await updateDoc(orderRef, {
+                status: "approved",
+                approvedAt: new Date().toISOString()
+            });
+            alert("✅ Đã duyệt đơn thành công!");
+        } catch (error) {
+            alert("❌ Lỗi xử lý: " + error.message);
+        }
+    };
+
+    window.rejectOrder = async function(orderId, deviceId, amount) {
+        if (!confirm(`Xác nhận TỪ CHỐI đơn này và HOÀN LẠI ${amount.toLocaleString('vi-VN')}đ cho người dùng?`)) return;
+
+        try {
+            const orderRef = doc(db, "withdrawals", orderId);
+            await updateDoc(orderRef, {
+                status: "rejected",
+                rejectedAt: new Date().toISOString()
+            });
+
+            if (deviceId) {
+                const userRef = doc(db, "users", deviceId);
+                await updateDoc(userRef, {
+                    balance: increment(amount)
+                });
+            }
+
+            alert("✅ Đã từ chối đơn và hoàn tiền vào ví người dùng!");
+        } catch (error) {
+            alert("❌ Lỗi khi từ chối đơn: " + error.message);
+        }
+    };
+</script>
+
+</body>
+</html>

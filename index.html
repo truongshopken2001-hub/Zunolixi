@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sự Kiện Giật Lì Xì - Zuno</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* CSS Bổ sung cho Form Đăng Nhập / Tài Khoản */
+        .user-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+        .btn-auth {
+            background: var(--gold);
+            color: #000;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .auth-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .auth-tab {
+            flex: 1;
+            padding: 8px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--gold);
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .auth-tab.active {
+            background: var(--gold);
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Canvas vẽ hiệu ứng rơi -->
+<canvas id="holidayCanvas"></canvas>
+
+<div class="app-container">
+
+    <!-- Thanh hiển thị người dùng / Đăng nhập -->
+    <div class="user-bar">
+        <span id="userInfoText">👤 Khách (Chưa đăng nhập)</span>
+        <button class="btn-auth" id="btnOpenAuth">Đăng Nhập</button>
+    </div>
+
+    <!-- Quảng cáo Banner Adsterra (Đầu trang) -->
+    <div class="ad-banner-box">
+        <script type="text/javascript">
+          atOptions = {
+            'key' : '80bb88f28d1105f5ed0cc369cb915421',
+            'format' : 'iframe',
+            'height' : 50,
+            'width' : 320,
+            'params' : {}
+          };
+        </script>
+        <script src="https://beansnicerroller.com/80bb88f28d1105f5ed0cc369cb915421/invoke.js"></script>
+    </div>
+
+    <!-- Thẻ số dư tài khoản -->
+    <div class="balance-card">
+        <h3>SỐ DƯ TÀI KHOẢN</h3>
+        <div class="balance-amount" id="userBalance">0 VNĐ</div>
+        <div id="holidayBadge" class="holiday-banner" style="display: none;"></div>
+    </div>
+
+    <!-- Bao lì xì & Đồng hồ đếm ngược -->
+    <div class="lixi-box">
+        <div class="envelope" id="lixiBtn">
+            <div class="envelope-btn">MỞ</div>
+        </div>
+        <p class="lixi-hint" id="lixiHint">Nhấn vào bao lì xì để nhận tiền!</p>
+        
+        <div id="countdownBox" style="display: none; margin-top: 12px; font-size: 13px; color: #ffab91;">
+            <span>Lượt tiếp theo sau: </span>
+            <strong id="timerText" style="color: var(--gold); font-size: 15px;">00:00:00</strong>
+        </div>
+    </div>
+
+    <!-- Chia sẻ giới thiệu -->
+    <div class="section-title">🎁 CHIA SẺ BẠN BÈ (+1.000đ)</div>
+    <div class="share-box">
+        <input type="text" id="refLink" readonly value="Vui lòng đăng nhập để lấy link...">
+        <button id="btnCopy">Copy</button>
+    </div>
+
+    <!-- Form rút tiền -->
+    <div class="section-title">💳 RÚT TIỀN VỀ NGÂN HÀNG</div>
+    <form id="withdrawForm">
+        <div class="form-group">
+            <select id="bankName" required>
+                <option value="">-- Chọn ngân hàng --</option>
+                <option value="MBBank">MBBank</option>
+                <option value="Vietcombank">Vietcombank</option>
+                <option value="Techcombank">Techcombank</option>
+                <option value="Momo">Ví MoMo</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <input type="text" id="accNumber" placeholder="Số tài khoản / Số ví" required>
+        </div>
+        <div class="form-group">
+            <input type="text" id="accHolder" placeholder="Tên chủ tài khoản" required>
+        </div>
+        <div class="form-group">
+            <input type="number" id="withdrawAmount" placeholder="Số tiền rút (10.000đ - 50.000đ)" min="10000" max="50000" required>
+        </div>
+        <button type="submit" class="btn-primary">GỬI YÊU CẦU RÚT TIỀN</button>
+    </form>
+
+    <!-- Quảng cáo Banner Adsterra (Cuối trang) -->
+    <div class="ad-banner-box" style="margin-top: 20px;">
+        <script type="text/javascript">
+          atOptions = {
+            'key' : '80bb88f28d1105f5ed0cc369cb915421',
+            'format' : 'iframe',
+            'height' : 50,
+            'width' : 320,
+            'params' : {}
+          };
+        </script>
+        <script src="https://beansnicerroller.com/80bb88f28d1105f5ed0cc369cb915421/invoke.js"></script>
+    </div>
+
+</div>
+
+<!-- Popup nhận thưởng lì xì -->
+<div class="modal" id="resultModal">
+    <div class="modal-content">
+        <h2>🎉 CHÚC MỪNG 🎉</h2>
+        <p style="margin-top: 10px;">Bạn đã nhận được lì xì:</p>
+        <div class="reward-amount" id="rewardDisplay">+0 VNĐ</div>
+        <button class="btn-primary" id="btnCloseModal">NHẬN TIỀN</button>
+    </div>
+</div>
+
+<!-- Modal Đăng Nhập / Đăng Ký -->
+<div class="modal" id="authModal">
+    <div class="modal-content">
+        <div class="auth-tabs">
+            <button class="auth-tab active" id="tabLogin">ĐĂNG NHẬP</button>
+            <button class="auth-tab" id="tabRegister">ĐĂNG KÝ</button>
+        </div>
+
+        <form id="authForm">
+            <div class="form-group">
+                <input type="text" id="authUsername" placeholder="Tên tài khoản (viết liền)" required>
+            </div>
+            <div class="form-group">
+                <input type="password" id="authPassword" placeholder="Mật khẩu" required>
+            </div>
+            <button type="submit" class="btn-primary" id="btnAuthSubmit">ĐĂNG NHẬP</button>
+        </form>
+        <button class="btn-primary" id="btnCloseAuthModal" style="background: #444; color: #fff; margin-top: 8px;">ĐÓNG</button>
+    </div>
+</div>
+
+<script type="module" src="script.js"></script>
+</body>
+</html>
