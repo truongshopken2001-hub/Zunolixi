@@ -43,19 +43,22 @@ body.theme-midautumn {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* Sửa triệt để khoảng trống phía dưới body */
 body {
     background-color: var(--bg-color);
     color: var(--text-white);
     display: flex;
     justify-content: center;
+    align-items: flex-start; /* Đẩy ứng dụng lên sát đỉnh */
     min-height: 100vh;
-    padding: 15px;
+    height: auto;
+    padding: 15px 15px 30px 15px; /* Padding dưới 30px vừa đẹp mắt */
     position: relative;
     overflow-x: hidden;
     transition: background-color 0.5s ease;
 }
 
-/* Canvas hiệu ứng hiệu ứng rơi */
+/* Canvas hiệu ứng rơi */
 #holidayCanvas {
     position: fixed;
     top: 0;
@@ -66,9 +69,11 @@ body {
     z-index: 1;
 }
 
+/* Khung ứng dụng ôm gọn nội dung */
 .app-container {
     width: 100%;
     max-width: 420px;
+    height: fit-content; /* Tự co theo nội dung, ngắt khoảng trống dư */
     background: #190103;
     border: 2px solid var(--gold);
     border-radius: 16px;
@@ -77,6 +82,7 @@ body {
     position: relative;
     z-index: 2;
     transition: border-color 0.5s ease;
+    margin: 0 auto;
 }
 
 .ad-banner-box {
