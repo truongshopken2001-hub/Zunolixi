@@ -29,6 +29,52 @@ let timerInterval = null;
 const REFERRAL_BONUS = 1000;
 
 // ===============================================
+// DANH SÁCH MỆNH GIÁ LÌ XÌ & HỆ SỐ LỄ
+// ===============================================
+
+// Mảng giá trị gốc lẻ/nhỏ (Số nhỏ xuất hiện nhiều lần -> tỉ lệ trúng cao)
+const baseRewardList = [
+    10, 10, 10, 10,
+    20, 20, 20,
+    30, 30, 30,
+    40, 40,
+    50, 50,
+    55, 65, 75, 100
+];
+
+// Cấu hình các ngày lễ x2, x3
+const HOLIDAY_MULTIPLIERS = [
+    { day: 1,  month: 1,  multiplier: 3, name: "Tết Dương Lịch (X3)" },
+    { day: 2,  month: 9,  multiplier: 3, name: "Quốc Khánh 2/9 (X3)" },
+    { day: 8,  month: 3,  multiplier: 2, name: "Quốc tế Phụ nữ 8/3 (X2)" },
+    { day: 20, month: 10, multiplier: 2, name: "Phụ nữ Việt Nam 20/10 (X2)" },
+    { day: 30, month: 4,  multiplier: 2, name: "Giải phóng miền Nam 30/4 (X2)" },
+    { day: 1,  month: 5,  multiplier: 2, name: "Quốc tế Lao động 1/5 (X2)" }
+];
+
+// Hàm lấy ngày tháng CHUẨN từ Server Việt Nam (GMT+7) - Chống đổi ngày giờ trên thiết bị
+async function getRealVietnamDate() {
+    try {
+        const response = await fetch('https://worldtimeapi.org/api/timezone/Asia/Ho_Chi_Minh');
+        const data = await response.json();
+        const serverDate = new Date(data.datetime);
+        return {
+            day: serverDate.getDate(),
+            month: serverDate.getMonth() + 1,
+            fullDateStr: `${serverDate.getFullYear()}-${String(serverDate.getMonth() + 1).padStart(2, '0')}-${String(serverDate.getDate()).padStart(2, '0')}`
+        };
+    } catch (error) {
+        console.warn("Lỗi gọi Server giờ, sử dụng giờ thiết bị làm dự phòng:", error);
+        const now = new Date();
+        return {
+            day: now.getDate(),
+            month: now.getMonth() + 1,
+            fullDateStr: getTodayString()
+        };
+    }
+}
+
+// ===============================================
 // 1. CHỨC NĂNG TỰ ĐỘNG ĐỔI HIỆU ỨNG NGÀY LỄ VIỆT NAM
 // ===============================================
 function initHolidayTheme() {
@@ -78,6 +124,7 @@ function initHolidayTheme() {
 
 function startHolidayCanvas(symbols) {
     const canvas = document.getElementById('holidayCanvas');
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
     let width = canvas.width = window.innerWidth;
@@ -239,14 +286,14 @@ function updateUserUI(username) {
     const refInput = document.getElementById('refLink');
 
     if (username) {
-        userInfoText.innerText = `👤 Xin chào: ${username}`;
-        btnOpenAuth.innerText = "Đăng Xuất";
+        if (userInfoText) userInfoText.innerText = `👤 Xin chào: ${username}`;
+        if (btnOpenAuth) btnOpenAuth.innerText = "Đăng Xuất";
         if (refInput) {
             refInput.value = `${window.location.origin}${window.location.pathname}?ref=${username}`;
         }
     } else {
-        userInfoText.innerText = "👤 Khách (Chưa đăng nhập)";
-        btnOpenAuth.innerText = "Đăng Nhập";
+        if (userInfoText) userInfoText.innerText = "👤 Khách (Chưa đăng nhập)";
+        if (btnOpenAuth) btnOpenAuth.innerText = "Đăng Nhập";
         if (refInput) {
             refInput.value = "Vui lòng đăng nhập để lấy link...";
         }
@@ -270,7 +317,8 @@ async function loadUserData() {
     try {
         const userRef = doc(db, "users", currentUser);
         const userSnap = await getDoc(userRef);
-        const todayStr = getTodayString();
+        const serverTime = await getRealVietnamDate();
+        const todayStr = serverTime.fullDateStr;
 
         if (userSnap.exists()) {
             const data = userSnap.data();
@@ -324,6 +372,7 @@ async function checkAndRewardReferral() {
     }
 }
 
+// Hàm mở lì xì với tính năng X2/X3 Ngày Lễ + Chống gian lận
 async function grabLixi() {
     if (!currentUser) {
         alert("⚠️ Vui lòng ĐĂNG NHẬP để giật lì xì!");
@@ -340,11 +389,15 @@ async function grabLixi() {
 
         if (!userSnap.exists()) {
             alert("❌ Lỗi tài khoản, vui lòng đăng nhập lại!");
+            lixiBtn.style.pointerEvents = 'auto';
             return;
         }
 
         const userData = userSnap.data();
-        const todayStr = getTodayString();
+        
+        // 1. Lấy ngày tháng thực từ Server
+        const serverTime = await getRealVietnamDate();
+        const todayStr = serverTime.fullDateStr;
 
         if (userData.lastClaimDate === todayStr) {
             alert("❌ Hôm nay bạn đã nhận lì xì rồi! Hãy quay lại vào ngày mai.");
@@ -353,8 +406,20 @@ async function grabLixi() {
             return;
         }
 
-        const randomBonus = Math.floor(Math.random() * (20000 - 1000 + 1)) + 1000;
+        // 2. Tra cứu hệ số x2, x3 ngày lễ từ Server Date
+        const holiday = HOLIDAY_MULTIPLIERS.find(
+            item => item.day === serverTime.day && item.month === serverTime.month
+        );
+        const multiplier = holiday ? holiday.multiplier : 1;
 
+        // 3. Random mệnh giá gốc trong mảng lẻ/nhỏ
+        const randomIndex = Math.floor(Math.random() * baseRewardList.length);
+        const baseAmount = baseRewardList[randomIndex];
+
+        // 4. Tính tổng thưởng thực nhận sau khi nhân
+        const randomBonus = baseAmount * multiplier;
+
+        // 5. Cập nhật Firebase
         await updateDoc(userRef, {
             balance: increment(randomBonus),
             lastClaimDate: todayStr,
@@ -364,7 +429,23 @@ async function grabLixi() {
         currentBalance += randomBonus;
         updateBalanceUI();
 
-        document.getElementById('rewardDisplay').innerText = "+" + randomBonus.toLocaleString('vi-VN') + " VNĐ";
+        // 6. Hiển thị thông báo kết quả
+        const rewardDisplay = document.getElementById('rewardDisplay');
+        if (rewardDisplay) {
+            rewardDisplay.innerText = "+" + randomBonus.toLocaleString('vi-VN') + " VNĐ";
+        }
+
+        // Dòng chú thích nếu trúng nhân hệ số ngày lễ
+        let noteElem = document.getElementById('rewardNote');
+        if (noteElem) {
+            if (multiplier > 1) {
+                noteElem.innerText = `🎉 Thưởng ngày lễ ${holiday.name}! (${baseAmount}đ x ${multiplier})`;
+                noteElem.style.color = "#ffd700";
+            } else {
+                noteElem.innerText = "";
+            }
+        }
+
         document.getElementById('resultModal').style.display = 'flex';
 
         disableLixiBtn();
@@ -378,18 +459,28 @@ async function grabLixi() {
 
 function disableLixiBtn() {
     const lixiBtn = document.getElementById('lixiBtn');
-    lixiBtn.style.pointerEvents = 'none';
-    lixiBtn.style.opacity = '0.5';
-    document.getElementById('lixiHint').innerText = "🔒 Bạn đã hết lượt giật hôm nay!";
-    document.getElementById('countdownBox').style.display = 'block';
+    if (lixiBtn) {
+        lixiBtn.style.pointerEvents = 'none';
+        lixiBtn.style.opacity = '0.5';
+    }
+    const hint = document.getElementById('lixiHint');
+    if (hint) hint.innerText = "🔒 Bạn đã hết lượt giật hôm nay!";
+    
+    const countBox = document.getElementById('countdownBox');
+    if (countBox) countBox.style.display = 'block';
 }
 
 function enableLixiBtn() {
     const lixiBtn = document.getElementById('lixiBtn');
-    lixiBtn.style.pointerEvents = 'auto';
-    lixiBtn.style.opacity = '1';
-    document.getElementById('lixiHint').innerText = "Nhấn vào bao lì xì để nhận tiền!";
-    document.getElementById('countdownBox').style.display = 'none';
+    if (lixiBtn) {
+        lixiBtn.style.pointerEvents = 'auto';
+        lixiBtn.style.opacity = '1';
+    }
+    const hint = document.getElementById('lixiHint');
+    if (hint) hint.innerText = "Nhấn vào bao lì xì để nhận tiền!";
+
+    const countBox = document.getElementById('countdownBox');
+    if (countBox) countBox.style.display = 'none';
 }
 
 function startCountdown() {
@@ -410,7 +501,8 @@ function startCountdown() {
         const minutes = String(Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))).padStart(2, '0');
         const seconds = String(Math.floor((diffMs % (1000 * 60)) / 1000)).padStart(2, '0');
 
-        document.getElementById('timerText').innerText = `${hours}:${minutes}:${seconds}`;
+        const timerText = document.getElementById('timerText');
+        if (timerText) timerText.innerText = `${hours}:${minutes}:${seconds}`;
     }
 
     updateTimer();
@@ -475,11 +567,15 @@ async function handleWithdraw(e) {
 }
 
 function updateBalanceUI() {
-    document.getElementById('userBalance').innerText = currentBalance.toLocaleString('vi-VN') + " VNĐ";
+    const elem = document.getElementById('userBalance');
+    if (elem) {
+        elem.innerText = currentBalance.toLocaleString('vi-VN') + " VNĐ";
+    }
 }
 
 function closeModal() {
-    document.getElementById('resultModal').style.display = 'none';
+    const modal = document.getElementById('resultModal');
+    if (modal) modal.style.display = 'none';
 }
 
 function copyRefLink() {
@@ -489,7 +585,9 @@ function copyRefLink() {
         return;
     }
     const copyText = document.getElementById("refLink");
-    copyText.select();
-    document.execCommand("copy");
-    alert("Đã chép link giới thiệu của bạn!");
+    if (copyText) {
+        copyText.select();
+        document.execCommand("copy");
+        alert("Đã chép link giới thiệu của bạn!");
+    }
 }
