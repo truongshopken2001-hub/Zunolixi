@@ -32,14 +32,16 @@ const REFERRAL_BONUS = 1000;
 // DANH SÁCH MỆNH GIÁ LÌ XÌ & HỆ SỐ LỄ
 // ===============================================
 
-// Mảng giá trị gốc lẻ/nhỏ (Số nhỏ xuất hiện nhiều lần -> tỉ lệ trúng cao)
+// Mảng giá trị gốc cập nhật mới theo danh sách tỉ lệ của bạn
 const baseRewardList = [
-    10, 10, 10, 10,
-    20, 20, 20,
-    30, 30, 30,
-    40, 40,
-    50, 50,
-    55, 65, 75, 100
+    50, 50, 50, 50, 50, 50, 50,
+    100, 100, 100, 100, 100,
+    200, 500,
+    30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
+    20, 20, 20, 20, 20, 20, 20,
+    30, 2026, 30,
+    20, 20, 10,
+    40, 40, 40
 ];
 
 // Cấu hình các ngày lễ x2, x3
@@ -246,7 +248,7 @@ async function handleAuthSubmit(e) {
 
         const data = userSnap.data();
         if (data.password !== password) {
-            alert("❌ Mật khẩu không chính xác!");
+            alert("❌ Mất khẩu không chính xác!");
             return;
         }
 
@@ -412,7 +414,7 @@ async function grabLixi() {
         );
         const multiplier = holiday ? holiday.multiplier : 1;
 
-        // 3. Random mệnh giá gốc trong mảng lẻ/nhỏ
+        // 3. Random mệnh giá gốc trong mảng
         const randomIndex = Math.floor(Math.random() * baseRewardList.length);
         const baseAmount = baseRewardList[randomIndex];
 
